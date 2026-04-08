@@ -4,7 +4,6 @@ async function callGemini(prompt) {
   let data;
 
   if (isDev) {
-    // 로컬: 직접 호출 (개발용)
     const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(url, {
@@ -15,19 +14,27 @@ async function callGemini(prompt) {
         generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
+    if (!response.ok) {
+      if (response.status === 429) throw new Error('요청이 너무 많습니다. 10초 후 다시 시도해주세요.');
+      throw new Error(`API error: ${response.status}`);
+    }
     data = await response.json();
   } else {
-    // 배포: 서버사이드로 호출
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt }),
     });
+    if (!response.ok) {
+      if (response.status === 429) throw new Error('요청이 너무 많습니다. 10초 후 다시 시도해주세요.');
+      throw new Error(`API error: ${response.status}`);
+    }
     data = await response.json();
   }
 
-  console.log('토큰:', { 입력: data.usageMetadata?.promptTokenCount, 출력: data.usageMetadata?.candidatesTokenCount });
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) throw new Error('AI 응답이 비어있습니다. 다시 시도해주세요.');
+  return text;
 }
 
 function parseJSON(raw) {
