@@ -232,7 +232,7 @@ function ProductInput({ criteria, profileTags, existingResults, onAnalysisComple
                 ✓ 성분표 인식 완료
               </p>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {ocrPreview.fieldCount}개 텍스트 영역 인식됨
+                아래 분석하기를 눌러주세요
               </p>
             </div>
           </div>
