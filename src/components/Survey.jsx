@@ -15,28 +15,32 @@ const QUESTIONS = [
     ],
   },
   {
-    id: 'damageLevel',
-    title: '모발 손상 정도는\n어떤가요?',
-    subtitle: '하나를 선택해주세요',
-    type: 'single',
-    options: [
-      { value: 'healthy', label: '건강해요', desc: '윤기 있고 탄력 있음' },
-      { value: 'slight', label: '약간 손상', desc: '끝이 갈라지거나 푸석함' },
-      { value: 'severe', label: '심한 손상', desc: '전체적으로 건조하고 끊어짐' },
-      { value: 'unknown', label: '모르겠어요', desc: '', muted: true },
-    ],
-  },
-  {
-    id: 'hairType',
-    title: '모발 굵기와 형태는요?',
-    subtitle: '하나를 선택해주세요',
-    type: 'single',
-    options: [
-      { value: 'thin-straight', label: '가는 직모', desc: '힘없이 처지고 볼륨이 잘 안 살아요' },
-      { value: 'thin-wavy', label: '가는 곱슬/웨이브', desc: '부스스하고 정리가 잘 안 돼요' },
-      { value: 'thick-straight', label: '굵은 직모', desc: '뻣뻣하고 머리숱이 많아 보여요' },
-      { value: 'thick-wavy', label: '굵은 곱슬/웨이브', desc: '풍성하지만 건조하고 부풀어요' },
-      { value: 'unknown', label: '모르겠어요', desc: '', muted: true },
+    id: 'combo_hair',
+    title: '모발 상태를 알려주세요',
+    subtitle: '각각 하나씩 선택해주세요',
+    type: 'combo',
+    subQuestions: [
+      {
+        id: 'damageLevel',
+        label: '손상 정도',
+        options: [
+          { value: 'healthy', label: '건강해요' },
+          { value: 'slight', label: '약간 손상' },
+          { value: 'severe', label: '심한 손상' },
+          { value: 'unknown', label: '모르겠어요' },
+        ],
+      },
+      {
+        id: 'hairType',
+        label: '굵기 & 형태',
+        options: [
+          { value: 'thin-straight', label: '가는 직모' },
+          { value: 'thin-wavy', label: '가는 곱슬' },
+          { value: 'thick-straight', label: '굵은 직모' },
+          { value: 'thick-wavy', label: '굵은 곱슬' },
+          { value: 'unknown', label: '모르겠어요' },
+        ],
+      },
     ],
   },
   {
@@ -80,16 +84,18 @@ function Survey({ mode, onComplete, onBack }) {
     setAnswers({ ...answers, [question.id]: value });
   };
 
+  const handleComboSelect = (subId, value) => {
+    setAnswers({ ...answers, [subId]: value });
+  };
+
   const handleMultiSelect = (value) => {
     const current = answers[question.id] || [];
     
-    // "none" or "unknown" clears others
     if (value === 'none' || value === 'unknown') {
       setAnswers({ ...answers, [question.id]: [value] });
       return;
     }
     
-    // Remove "none"/"unknown" when selecting other options
     let updated = current.filter((v) => v !== 'none' && v !== 'unknown');
     
     if (updated.includes(value)) {
@@ -103,12 +109,21 @@ function Survey({ mode, onComplete, onBack }) {
 
   const isSelected = (value) => {
     if (question.type === 'single') return answers[question.id] === value;
-    return (answers[question.id] || []).includes(value);
+    if (question.type === 'multi') return (answers[question.id] || []).includes(value);
+    return false;
+  };
+
+  const isComboSelected = (subId, value) => {
+    return answers[subId] === value;
   };
 
   const canProceed = () => {
     if (question.type === 'single') return !!answers[question.id];
-    return (answers[question.id] || []).length > 0;
+    if (question.type === 'multi') return (answers[question.id] || []).length > 0;
+    if (question.type === 'combo') {
+      return question.subQuestions.every((sq) => !!answers[sq.id]);
+    }
+    return false;
   };
 
   const handleNext = () => {
@@ -144,7 +159,7 @@ function Survey({ mode, onComplete, onBack }) {
       <h1 className="page-title" style={{ whiteSpace: 'pre-line' }}>{question.title}</h1>
       <p className="page-subtitle">{question.subtitle}</p>
 
-      {question.type === 'single' ? (
+      {question.type === 'single' && (
         <div className="options-list">
           {question.options.map((opt) => (
             <div
@@ -164,7 +179,30 @@ function Survey({ mode, onComplete, onBack }) {
             </div>
           ))}
         </div>
-      ) : (
+      )}
+
+      {question.type === 'combo' && (
+        <div className="combo-container">
+          {question.subQuestions.map((sq) => (
+            <div key={sq.id} className="combo-section">
+              <p className="combo-label">{sq.label}</p>
+              <div className="chips-grid">
+                {sq.options.map((opt) => (
+                  <div
+                    key={opt.value}
+                    className={`chip ${isComboSelected(sq.id, opt.value) ? 'selected' : ''} ${opt.value === 'unknown' ? 'chip-muted' : ''}`}
+                    onClick={() => handleComboSelect(sq.id, opt.value)}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {question.type === 'multi' && (
         <div className="chips-grid">
           {question.options.map((opt) => (
             <div

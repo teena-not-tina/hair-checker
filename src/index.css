@@ -156,6 +156,15 @@ body {
   background: var(--primary-light);
   color: var(--primary-dark); font-weight: 500;
 }
+.chip-muted { color: var(--text-tertiary); border-style: dashed; }
+
+/* Combo Question */
+.combo-container { display: flex; flex-direction: column; gap: 20px; }
+.combo-section {}
+.combo-label {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 10px; padding-left: 2px;
+}
 
 /* Buttons */
 .btn-primary {
