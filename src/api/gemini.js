@@ -1,40 +1,55 @@
 const isDev = process.env.NODE_ENV === 'development';
 
-async function callGemini(prompt) {
-  let data;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  if (isDev) {
-    const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
-      }),
-    });
-    if (!response.ok) {
-      if (response.status === 429) throw new Error('요청이 너무 많습니다. 10초 후 다시 시도해주세요.');
-      throw new Error(`API error: ${response.status}`);
+async function callGemini(prompt, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      let response;
+
+      if (isDev) {
+        const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
+          }),
+        });
+      } else {
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+      }
+
+      if (response.status === 429) {
+        const waitSec = (attempt + 1) * 5;
+        console.log(`429 rate limit, ${waitSec}초 후 재시도 (${attempt + 1}/${retries})`);
+        if (attempt < retries - 1) {
+          await sleep(waitSec * 1000);
+          continue;
+        }
+        throw new Error('요청이 많아 분석이 지연되고 있어요. 1분 후 다시 시도해주세요.');
+      }
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!text) throw new Error('AI 응답이 비어있습니다. 다시 시도해주세요.');
+      return text;
+
+    } catch (e) {
+      if (attempt === retries - 1) throw e;
+      if (!e.message.includes('429') && !e.message.includes('rate limit')) throw e;
     }
-    data = await response.json();
-  } else {
-    const response = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    });
-    if (!response.ok) {
-      if (response.status === 429) throw new Error('요청이 너무 많습니다. 10초 후 다시 시도해주세요.');
-      throw new Error(`API error: ${response.status}`);
-    }
-    data = await response.json();
   }
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!text) throw new Error('AI 응답이 비어있습니다. 다시 시도해주세요.');
-  return text;
 }
 
 function parseJSON(raw) {
