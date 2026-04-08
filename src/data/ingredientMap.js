@@ -187,6 +187,20 @@ export function generateCriteria(profile) {
     concerns.forEach((c) => { if (concernMap[c]) { goodIngredients.push(...concernMap[c].good); badIngredients.push(...concernMap[c].bad); } });
   }
 
+  // 모두 "모르겠어요"일 때 범용 기본 기준 제공
+  if (goodIngredients.length === 0 && badIngredients.length === 0) {
+    goodIngredients = [
+      { name: '판테놀', reason: '보습과 진정에 두루 효과적인 범용 성분' },
+      { name: '나이아신아마이드', reason: '두피 장벽 강화 및 유수분 밸런스 조절' },
+      { name: '비오틴', reason: '모발 건강 유지에 기본적으로 도움' },
+    ];
+    badIngredients = [
+      { name: 'SLS / SLES', reason: '자극이 강할 수 있는 세정 성분' },
+      { name: '파라벤', reason: '민감한 두피에 자극 가능성' },
+      { name: '인공향료', reason: '불필요한 화학 자극 요소' },
+    ];
+  }
+
   const uniqueGood = [];
   const seenGood = new Set();
   goodIngredients.forEach((item) => { if (!seenGood.has(item.name)) { seenGood.add(item.name); uniqueGood.push(item); } });

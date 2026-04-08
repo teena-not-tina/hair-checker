@@ -16,11 +16,28 @@ function CriteriaResult({ criteria, profileTags, mode, onGoToProducts, onGoToChe
       <div className="profile-summary">
         <p className="profile-label">나의 프로필</p>
         <div className="profile-tags">
-          {profileTags.map((tag, i) => (
-            <span key={i} className={`tag tag-${tag.type}`}>{tag.text}</span>
-          ))}
+          {profileTags.length > 0 ? (
+            profileTags.map((tag, i) => (
+              <span key={i} className={`tag tag-${tag.type}`}>{tag.text}</span>
+            ))
+          ) : (
+            <span className="tag tag-default">일반 기준 적용</span>
+          )}
         </div>
       </div>
+
+      {profileTags.length === 0 && (
+        <div style={{
+          background: 'var(--warning-light, #FFF8E1)',
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-sm, 8px)',
+          fontSize: '13px',
+          color: 'var(--warning-dark, #F57C00)',
+          marginBottom: '16px',
+        }}>
+          선택 정보가 부족하여 범용 기준이 적용되었어요. 더 정확한 분석을 원하시면 문진을 다시 해보세요.
+        </div>
+      )}
 
       {/* Good Ingredients */}
       {criteria.good.length > 0 && (
