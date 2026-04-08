@@ -58,10 +58,17 @@ export async function analyzeProduct(productName, criteria, profileTags) {
 나쁜성분: ${bad}
 제품: ${productName}
 
-JSON형식:
-{"productName":"정식명","brand":"브랜드","category":"샴푸/트리트먼트/에센스","score":0-100,"summary":"10자요약","goodMatches":[{"name":"성분","reason":"이유","status":"good"}],"warnings":[{"name":"성분","reason":"이유","status":"warn"}],"badMatches":[{"name":"성분","reason":"이유","status":"bad"}],"tip":"15자팁"}
+성분판정기준:
+- 나쁜성분이라도 전성분표 뒤쪽(소량)이면 warnings로 분류
+- SLS/SLES: 지성두피에는 세정력이 필요하므로 warnings(주의)로. 건성/민감성이면 badMatches
+- 실리콘: 트리트먼트/에센스에서는 코팅효과로 warnings. 샴푸에서 지성두피면 badMatches
+- 알코올: 변성알코올만 주의. 세틸알코올/세테아릴알코올은 보습 성분이므로 goodMatches 가능
+- 함량 추정: 전성분표 순서가 앞(1~5번)이면 고함량→영향 큼, 뒤쪽이면 저함량→영향 작음
 
-점수: 80+적합, 50-79주의, 0-49비추. 모르는 제품이면 {"error":true,"message":"제품정보없음"}`;
+JSON형식:
+{"productName":"정식명","brand":"브랜드","category":"샴푸/트리트먼트/에센스","score":0-100,"summary":"10자요약","goodMatches":[{"name":"성분","reason":"이유","status":"good"}],"warnings":[{"name":"성분","reason":"주의이유와맥락","status":"warn"}],"badMatches":[{"name":"성분","reason":"이유","status":"bad"}],"tip":"15자팁"}
+
+점수: 85+매우적합, 70-84적합, 50-69주의필요, 0-49비추천. 모르는 제품이면 {"error":true,"message":"제품정보없음"}`;
 
   return parseJSON(await callGemini(prompt));
 }
@@ -78,10 +85,17 @@ export async function analyzeIngredients(ingredientText, criteria, profileTags) 
 나쁜성분: ${bad}
 성분목록: ${ingredientText}
 
-JSON형식:
-{"productName":"직접입력","brand":"-","category":"-","score":0-100,"summary":"10자요약","goodMatches":[{"name":"성분","reason":"이유","status":"good"}],"warnings":[{"name":"성분","reason":"이유","status":"warn"}],"badMatches":[{"name":"성분","reason":"이유","status":"bad"}],"tip":"15자팁"}
+성분판정기준:
+- 나쁜성분이라도 전성분표 뒤쪽(소량)이면 warnings로 분류
+- SLS/SLES: 지성두피에는 세정력이 필요하므로 warnings(주의)로. 건성/민감성이면 badMatches
+- 실리콘: 트리트먼트/에센스에서는 코팅효과로 warnings. 샴푸에서 지성두피면 badMatches
+- 알코올: 변성알코올만 주의. 세틸알코올/세테아릴알코올은 보습 성분이므로 goodMatches 가능
+- 함량 추정: 전성분표 순서가 앞(1~5번)이면 고함량→영향 큼, 뒤쪽이면 저함량→영향 작음
 
-점수: 80+적합, 50-79주의, 0-49비추.`;
+JSON형식:
+{"productName":"직접입력","brand":"-","category":"-","score":0-100,"summary":"10자요약","goodMatches":[{"name":"성분","reason":"이유","status":"good"}],"warnings":[{"name":"성분","reason":"주의이유와맥락","status":"warn"}],"badMatches":[{"name":"성분","reason":"이유","status":"bad"}],"tip":"15자팁"}
+
+점수: 85+매우적합, 70-84적합, 50-69주의필요, 0-49비추천.`;
 
   return parseJSON(await callGemini(prompt));
 }
