@@ -1,198 +1,133 @@
-import React, { useState } from 'react';
-import { analyzeProduct, analyzeIngredients } from '../api/gemini';
+const isDev = process.env.NODE_ENV === 'development';
 
-function ProductInput({ criteria, profileTags, existingResults, onAnalysisComplete, onBack }) {
-  const [productName, setProductName] = useState('');
-  const [ingredientText, setIngredientText] = useState('');
-  const [products, setProducts] = useState(existingResults || []);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [inputMode, setInputMode] = useState('product'); // 'product' or 'ingredient'
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const handleAddProduct = async () => {
-    if (!productName.trim()) return;
-    
-    setLoading(true);
-    setError(null);
-    
+async function callGemini(prompt, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const result = await analyzeProduct(productName.trim(), criteria, profileTags);
-      
-      if (result.error) {
-        setError(result.message);
+      let response;
+
+      if (isDev) {
+        const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
+          }),
+        });
       } else {
-        setProducts([...products, result]);
-        setProductName('');
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
       }
-    } catch (e) {
-      setError('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
-    
-    setLoading(false);
-  };
 
-  const handleAnalyzeIngredients = async () => {
-    if (!ingredientText.trim()) return;
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const result = await analyzeIngredients(ingredientText.trim(), criteria, profileTags);
-      
-      if (result.error) {
-        setError(result.message);
-      } else {
-        setProducts([...products, result]);
-        setIngredientText('');
+      if (response.status === 429) {
+        const waitSec = (attempt + 1) * 5;
+        console.log(`429 rate limit, ${waitSec}초 후 재시도 (${attempt + 1}/${retries})`);
+        if (attempt < retries - 1) {
+          await sleep(waitSec * 1000);
+          continue;
+        }
+        throw new Error('요청이 많아 분석이 지연되고 있어요. 1분 후 다시 시도해주세요.');
       }
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!text) throw new Error('AI 응답이 비어있습니다. 다시 시도해주세요.');
+      return text;
+
     } catch (e) {
-      setError('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
+      if (attempt === retries - 1) throw e;
+      if (!e.message.includes('429') && !e.message.includes('rate limit')) throw e;
     }
-    
-    setLoading(false);
-  };
-
-  const removeProduct = (index) => {
-    setProducts(products.filter((_, i) => i !== index));
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !loading) {
-      handleAddProduct();
-    }
-  };
-
-  return (
-    <div className="page fade-in">
-      <div className="page-header">
-        <button className="back-button" onClick={onBack}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <p style={{ fontSize: '15px', fontWeight: 600, flex: 1 }}>제품 분석</p>
-      </div>
-
-      <h1 className="page-title">검증할 제품을<br />입력해주세요</h1>
-      <p className="page-subtitle">최대 3개까지 비교할 수 있어요</p>
-
-      {/* Input Mode Toggle */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <button
-          className={inputMode === 'product' ? 'chip selected' : 'chip'}
-          onClick={() => setInputMode('product')}
-        >
-          제품명으로 검색
-        </button>
-        <button
-          className={inputMode === 'ingredient' ? 'chip selected' : 'chip'}
-          onClick={() => setInputMode('ingredient')}
-        >
-          성분 직접 입력
-        </button>
-      </div>
-
-      {inputMode === 'product' ? (
-        <div className="product-input-area">
-          <input
-            className="product-input"
-            type="text"
-            placeholder="예) 닥터그루트 샴푸, TS 샴푸"
-            value={productName}
-            onChange={(e) => setProductName(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={loading || products.length >= 3}
-          />
-          <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
-            제품명을 입력하면 AI가 성분을 분석해요
-          </p>
-        </div>
-      ) : (
-        <div className="product-input-area">
-          <textarea
-            className="ingredient-textarea"
-            placeholder="전성분표를 붙여넣어주세요&#10;예) 정제수, 소듐라우레스설페이트, 코카미도프로필베타인..."
-            value={ingredientText}
-            onChange={(e) => setIngredientText(e.target.value)}
-            disabled={loading || products.length >= 3}
-          />
-        </div>
-      )}
-
-      {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          color: 'var(--danger-dark)',
-          padding: '12px 16px',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '13px',
-          marginBottom: '16px',
-        }}>
-          {error}
-        </div>
-      )}
-
-      {loading && (
-        <div className="loading-container" style={{ padding: '30px 20px' }}>
-          <div className="loading-spinner" />
-          <p className="loading-text">
-            AI가 성분을 분석하고 있어요<br />
-            잠시만 기다려주세요
-          </p>
-        </div>
-      )}
-
-      {/* Added Products */}
-      {products.length > 0 && (
-        <div style={{ marginTop: '16px' }}>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-            분석 완료 ({products.length}/3)
-          </p>
-          <div className="product-list" style={{ flexDirection: 'column' }}>
-            {products.map((p, i) => (
-              <div className="product-tag" key={i} style={{ justifyContent: 'space-between', width: '100%' }}>
-                <span>{p.productName} — {p.score}점</span>
-                <button className="product-tag-remove" onClick={() => removeProduct(i)}>✕</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="spacer" />
-
-      <div className="bottom-actions">
-        {products.length === 0 ? (
-          <button
-            className="btn-primary"
-            onClick={inputMode === 'product' ? handleAddProduct : handleAnalyzeIngredients}
-            disabled={loading || (inputMode === 'product' ? !productName.trim() : !ingredientText.trim())}
-          >
-            {loading ? '분석 중...' : '분석하기'}
-          </button>
-        ) : (
-          <>
-            {products.length < 3 && (
-              <button
-                className="btn-secondary"
-                onClick={inputMode === 'product' ? handleAddProduct : handleAnalyzeIngredients}
-                disabled={loading || (inputMode === 'product' ? !productName.trim() : !ingredientText.trim())}
-              >
-                + 제품 추가 분석
-              </button>
-            )}
-            <button
-              className="btn-primary"
-              onClick={() => onAnalysisComplete(products)}
-            >
-              {products.length > 1 ? '비교 결과 보기' : '결과 보기'}
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
+  }
 }
 
-export default ProductInput;
+function parseJSON(raw) {
+  try {
+    return JSON.parse(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  } catch (e) {
+    console.error('JSON parse failed:', raw);
+    return { error: true, message: '분석 결과를 처리하는 중 오류가 발생했습니다.' };
+  }
+}
+
+export async function analyzeProduct(productName, criteria, profileTags) {
+  const good = criteria.good.map(i => i.name).join(', ');
+  const bad = criteria.bad.map(i => i.name).join(', ');
+  const profile = profileTags.map(t => t.text).join(', ');
+
+  const prompt = `헤어케어 성분 전문가로서 답변. 반드시 JSON만 출력.
+
+프로필: ${profile}
+좋은성분: ${good}
+나쁜성분: ${bad}
+제품: ${productName}
+
+성분판정기준:
+- 나쁜성분이라도 전성분표 뒤쪽(소량)이면 warnings로 분류
+- SLS/SLES: 지성두피에는 세정력이 필요하므로 warnings(주의)로. 건성/민감성이면 badMatches
+- 실리콘: 트리트먼트/에센스에서는 코팅효과로 warnings. 샴푸에서 지성두피면 badMatches
+- 알코올: 변성알코올만 주의. 세틸알코올/세테아릴알코올은 보습 성분이므로 goodMatches 가능
+- 함량 추정: 전성분표 순서가 앞(1~5번)이면 고함량→영향 큼, 뒤쪽이면 저함량→영향 작음
+
+JSON형식:
+{"productName":"정식명","brand":"브랜드","category":"샴푸/트리트먼트/에센스","score":0-100,"summary":"10자요약","goodMatches":[{"name":"성분","reason":"이유","status":"good"}],"warnings":[{"name":"성분","reason":"주의이유와맥락","status":"warn"}],"badMatches":[{"name":"성분","reason":"이유","status":"bad"}],"tip":"15자팁"}
+
+점수: 85+매우적합, 70-84적합, 50-69주의필요, 0-49비추천. 모르는 제품이면 {"error":true,"message":"제품정보없음"}`;
+
+  return parseJSON(await callGemini(prompt));
+}
+
+export async function analyzeIngredients(ingredientText, criteria, profileTags) {
+  const good = criteria.good.map(i => i.name).join(', ');
+  const bad = criteria.bad.map(i => i.name).join(', ');
+  const profile = profileTags.map(t => t.text).join(', ');
+
+  const prompt = `헤어케어 성분 전문가로서 답변. 반드시 JSON만 출력.
+
+프로필: ${profile}
+좋은성분: ${good}
+나쁜성분: ${bad}
+성분목록: ${ingredientText}
+
+성분판정기준:
+- 나쁜성분이라도 전성분표 뒤쪽(소량)이면 warnings로 분류
+- SLS/SLES: 지성두피에는 세정력이 필요하므로 warnings(주의)로. 건성/민감성이면 badMatches
+- 실리콘: 트리트먼트/에센스에서는 코팅효과로 warnings. 샴푸에서 지성두피면 badMatches
+- 알코올: 변성알코올만 주의. 세틸알코올/세테아릴알코올은 보습 성분이므로 goodMatches 가능
+- 함량 추정: 전성분표 순서가 앞(1~5번)이면 고함량→영향 큼, 뒤쪽이면 저함량→영향 작음
+
+JSON형식:
+{"productName":"직접입력","brand":"-","category":"-","score":0-100,"summary":"10자요약","goodMatches":[{"name":"성분","reason":"이유","status":"good"}],"warnings":[{"name":"성분","reason":"주의이유와맥락","status":"warn"}],"badMatches":[{"name":"성분","reason":"이유","status":"bad"}],"tip":"15자팁"}
+
+점수: 85+매우적합, 70-84적합, 50-69주의필요, 0-49비추천.`;
+
+  return parseJSON(await callGemini(prompt));
+}
+
+export async function getRecommendation(criteria, profileTags, productCategory) {
+  const good = criteria.good.map(i => i.name).join(', ');
+  const bad = criteria.bad.map(i => i.name).join(', ');
+  const profile = profileTags.map(t => t.text).join(', ');
+
+  const prompt = `헤어케어 전문가. JSON만 출력.
+
+프로필: ${profile}
+제품유형: ${productCategory}
+좋은성분: ${good}
+나쁜성분: ${bad}
+
+{"additionalTips":["팁1","팁2","팁3"],"recommendedType":"추천제형","avoidType":"피할제형"}`;
+
+  return parseJSON(await callGemini(prompt));
+}
