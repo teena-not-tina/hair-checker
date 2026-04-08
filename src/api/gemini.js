@@ -26,14 +26,15 @@ async function callGemini(prompt, retries = 3) {
         });
       }
 
-      if (response.status === 429) {
+      if (response.status === 429 || response.status === 503) {
         const waitSec = (attempt + 1) * 5;
-        console.log(`429 rate limit, ${waitSec}초 후 재시도 (${attempt + 1}/${retries})`);
+        const reason = response.status === 429 ? 'rate limit' : '서버 일시 장애';
+        console.log(`${response.status} ${reason}, ${waitSec}초 후 재시도 (${attempt + 1}/${retries})`);
         if (attempt < retries - 1) {
           await sleep(waitSec * 1000);
           continue;
         }
-        throw new Error('요청이 많아 분석이 지연되고 있어요. 1분 후 다시 시도해주세요.');
+        throw new Error('AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요.');
       }
 
       if (!response.ok) {
@@ -47,7 +48,7 @@ async function callGemini(prompt, retries = 3) {
 
     } catch (e) {
       if (attempt === retries - 1) throw e;
-      if (!e.message.includes('429') && !e.message.includes('rate limit')) throw e;
+      if (!e.message.includes('서버') && !e.message.includes('429') && !e.message.includes('rate limit')) throw e;
     }
   }
 }
